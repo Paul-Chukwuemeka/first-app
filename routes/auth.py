@@ -9,9 +9,10 @@ from utils.crypto import verify, hash_password
 from utils.generate_jwt import create_token
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
-from models.userModel import User
+from models.userModel import User,roles
 import os
 from jose import jwt
+from enum import Enum
 
 
 
@@ -24,11 +25,13 @@ class NewUser(BaseModel):
     username: str
     email: str
     password: str
+    role: Optional[str] = None
 
 class loginUser(BaseModel):
     email: str
     password: str
 
+    
 
 router = APIRouter()
 
@@ -46,15 +49,24 @@ def getUser(token = Depends(oauth), db: Session = Depends(get_db)):
     return found
 
 
+def verify_roles(*allowed: roles):
+    def _verify(user:User = Depends(getUser)):
+        if(user.role not in allowed):
+            raise HTTPException(status_code=404,detail="Invalid Role")
+        return user
+    return _verify
+
+
 @router.post("/users/add")
 def create_new_user(user: NewUser,db: Session = Depends(get_db)):
     try:
         new_user = User(
-            username = user.username,
-            email = user.email,
-            password = hash_password(user.password)
-            )
-        
+    username=user.username,
+    email=user.email,
+    password=hash_password(user.password),
+    role=roles(user.role) if user.role else roles.customer
+)
+            
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
@@ -102,3 +114,28 @@ def get_user_by_id(id: UUID,db: Session = Depends(get_db)):
     return found
    except IntegrityError as err:
        return err
+   
+
+@router.get("/users")
+def get_users(db: Session = Depends(get_db)):
+   try:
+    found = db.query(User).all()
+    return found
+   except IntegrityError as err:
+       return err
+   
+   
+@router.patch("/users/promote/{id}")
+def promote_user(id:UUID,db:Session = Depends(get_db),verify = Depends(verify_roles(roles.admin))):
+    try:
+        found = db.query(User).filter(User.user_id == id).first()
+        if not found:
+            raise HTTPException(status_code=404,detail="user not found")
+        found.role = roles.admin
+        db.commit()
+        db.refresh(found)
+        return found
+        
+    except IntegrityError as err:
+        db.rollback()
+        return err
