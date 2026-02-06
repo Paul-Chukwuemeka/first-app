@@ -7,19 +7,11 @@ from typing import Optional
 from uuid import UUID
 from utils.crypto import verify, hash_password
 from utils.generate_jwt import create_token
-from fastapi.security import OAuth2PasswordBearer
-from dotenv import load_dotenv
 from models.userModel import User,roles
-import os
-from jose import jwt
-from enum import Enum
+
+from utils.secure import getUser, verify_roles
 
 
-
-load_dotenv()
-
-secret = os.getenv("SECRET") 
-algorithm = "HS256"
 
 class NewUser(BaseModel):
     username: str
@@ -35,26 +27,9 @@ class loginUser(BaseModel):
 
 router = APIRouter()
 
-oauth = OAuth2PasswordBearer(tokenUrl="login")
 
 
-def getUser(token = Depends(oauth), db: Session = Depends(get_db)):
-    value = jwt.decode(token,str(secret),algorithms=[algorithm])
-    id = value["id"]
-    found = get_user_by_id(id, db)
-    if not found or isinstance(found, Exception):
-        raise HTTPException(status_code=400,detail="invalid token")
-    if (found.token_version != value["token_version"]):
-        raise HTTPException(status_code=400,detail="invalid token")
-    return found
 
-
-def verify_roles(*allowed: roles):
-    def _verify(user:User = Depends(getUser)):
-        if(user.role not in allowed):
-            raise HTTPException(status_code=404,detail="Invalid Role")
-        return user
-    return _verify
 
 
 @router.post("/users/add")
