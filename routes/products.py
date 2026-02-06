@@ -23,7 +23,7 @@ class UserOut(BaseModel):
     username: str
     
     class Config:
-        from_attributes = True
+        orm_mode = True
         
         
 class ProductOut(BaseModel):
@@ -32,10 +32,13 @@ class ProductOut(BaseModel):
     price : Decimal
     description : Optional[str] = None
     vendor: UserOut
+    
+    class Config:
+        orm_mode = True
         
 
 # add new product
-@router.post("/products/add",response_model=list[ProductOut])
+@router.post("/products/add",response_model=ProductOut)
 def add_products(product: newProduct ,db:Session = Depends(get_db),user = Depends(verify_roles(roles.vendor))):
     try:
         new = Product(
@@ -64,7 +67,38 @@ def get_all_products(db:Session = Depends(get_db)):
         return all
         
     except IntegrityError as err:
-        db.rollback()
+        raise HTTPException(status_code=400,detail=err)
+
+
+ 
+# get products of logged in vendor
+    
+@router.get("/products/mine", response_model=list[ProductOut])
+def get_vendor_products(db:Session = Depends(get_db), user = Depends(verify_roles(roles.vendor))):
+    try:
+        products = db.query(Product).options(joinedload(Product.vendor)).filter(Product.vendor_id == user.user_id).all()
+        if not products:
+            raise HTTPException(status_code=400,detail="No products")
+        return products
+    except IntegrityError as err:
+        raise HTTPException(status_code=400,detail=err)
+    
+    
+    
+    
+# get products by vendor id
+@router.get("/products/vendor/{id}", response_model= list[ProductOut])
+def get_vendor_products_by_id(id: UUID,db:Session = Depends(get_db)):
+    try: 
+        vendor =  db.query(User).filter(User.user_id == id).first()
+        if not vendor:
+            raise HTTPException(status_code=404,detail="Vendor does no exist")    
+        found = db.query(Product).options(joinedload(Product.vendor)).filter(Product.vendor_id == id).all()
+        if not found:
+            raise HTTPException(status_code=404,detail="no product by this vendor")    
+        return found
+        
+    except IntegrityError as err:
         raise HTTPException(status_code=400,detail=err)
 
 
@@ -78,25 +112,5 @@ def get_products_by_id(id: UUID,db:Session = Depends(get_db)):
         return found
         
     except IntegrityError as err:
-        db.rollback()
         raise HTTPException(status_code=400,detail=err)
-    
-    
-    
-# get products by vendor id
-@router.get("/products/vendor/{id}", response_model= list[ProductOut])
-def get_vendor_products(id: UUID,db:Session = Depends(get_db)):
-    try: 
-        vendor =  db.query(User).filter(User.user_id == id).first()
-        if not vendor:
-            raise HTTPException(status_code=404,detail="Vendor does no exist")    
-        found = db.query(Product).options(joinedload(Product.vendor)).filter(Product.vendor_id == id).all()
-        if not found:
-            raise HTTPException(status_code=404,detail="no product by this vendor")    
-        return found
-        
-    except IntegrityError as err:
-        db.rollback()
-        raise HTTPException(status_code=400,detail=err)
-
-
+ 

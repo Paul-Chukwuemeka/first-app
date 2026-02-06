@@ -1,5 +1,6 @@
 from fastapi import Depends,HTTPException
 from jose import jwt
+from jose.exceptions import ExpiredSignatureError
 from fastapi.security import OAuth2PasswordBearer
 import os
 from dotenv import load_dotenv
@@ -28,7 +29,11 @@ def get_user_by_id(id: UUID,db: Session = Depends(get_db)):
 
 
 def getUser(token = Depends(oauth), db: Session = Depends(get_db)):
-    value = jwt.decode(token,str(secret),algorithms=[algorithm])
+    try:
+        value = jwt.decode(token,str(secret),algorithms=[algorithm])
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    
     id = value["id"]
     found = get_user_by_id(id, db)
     if not found or isinstance(found, Exception):
