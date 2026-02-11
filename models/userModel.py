@@ -10,7 +10,6 @@ class roles(str,Enum):
     admin  = "admin"
     customer  = "customer"
     vendor  = "vendor"
-    
 
 
 class User(Base):
@@ -19,6 +18,8 @@ class User(Base):
     username = Column(String,nullable=False,unique=True)
     email = Column(String,nullable=False,unique=True)
     password = Column(String, nullable=False)
+    otp = Column(Integer,nullable=True)
+    otp_expiry_time = Column(DateTime(timezone=True),nullable=True)
     role: Mapped[roles] = mapped_column(
         SqlEnum(roles, name="role_enum"),default=roles.customer,nullable=False
     )

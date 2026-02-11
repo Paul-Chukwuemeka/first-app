@@ -8,45 +8,45 @@ from uuid import UUID
 from utils.crypto import verify, hash_password
 from utils.generate_jwt import create_token
 from models.userModel import User,roles
-
 from utils.secure import getUser, verify_roles
-
-
+import random
+from datetime import datetime, timedelta,timezone
 
 class NewUser(BaseModel):
     username: str
     email: str
     password: str
-    role: Optional[str] = None
 
 class loginUser(BaseModel):
     email: str
     password: str
 
-    
-
 router = APIRouter()
 
+class otpConfirm(BaseModel):
+    otp: int
 
-
-
-
+class UserOut(BaseModel):
+    user_id : UUID
+    otp : int
+    role : str
+     
+    class Config:
+        orm_mode = True
 
 @router.post("/users/add")
 def create_new_user(user: NewUser,db: Session = Depends(get_db)):
     try:
         new_user = User(
-    username=user.username,
-    email=user.email,
-    password=hash_password(user.password),
-    role=roles(user.role) if user.role else roles.customer
+        username=user.username,
+        email=user.email,
+        password=hash_password(user.password),
+        role= roles.customer
 )
-            
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        return new_user
-        
+        return new_user    
     except IntegrityError as err:
         db.rollback()
         return err
@@ -99,6 +99,43 @@ def get_users(db: Session = Depends(get_db)):
    except IntegrityError as err:
        return err
    
+@router.patch("/users/upgrade/request", response_model= UserOut)
+def upgrade_user(db:Session = Depends(get_db),user = Depends(verify_roles(roles.customer))):
+    try:
+        otp = random.randint(1000,9999)
+        user.otp = otp
+        user.otp_expiry_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        db.commit()
+        db.refresh(user)
+        return user
+    
+    
+    except IntegrityError as err:
+        db.rollback()
+        return err
+    
+@router.post("/users/upgrade/confirm" , response_model= UserOut)
+def upgrade_user_confirm(payload:otpConfirm,db:Session = Depends(get_db),user = Depends(verify_roles(roles.customer))):
+    try:
+        if not user.otp or  user.otp != payload.otp:
+            raise HTTPException(status_code=400,detail="invalid otp")
+        if user.otp_expiry_time < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400,detail="expired otp")
+        
+        user.role = roles.vendor
+        user.otp = None
+        user.otp_expiry_time = None
+        
+        db.commit()
+        db.refresh(user)
+        return user       
+    except IntegrityError as err:
+        db.rollback()
+        return err
+
+
+   
+#    request --> create otp --> user --> send back --> verify otp --> upgrade the user
    
 @router.patch("/users/promote/{id}")
 def promote_user(id:UUID,db:Session = Depends(get_db),verify = Depends(verify_roles(roles.admin))):

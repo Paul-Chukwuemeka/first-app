@@ -23,7 +23,7 @@ class UserOut(BaseModel):
     username: str
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         
         
 class ProductOut(BaseModel):
@@ -34,7 +34,16 @@ class ProductOut(BaseModel):
     vendor: UserOut
     
     class Config:
-        orm_mode = True
+        from_attributes = True
+        
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
         
 
 # add new product
@@ -50,7 +59,6 @@ def add_products(product: newProduct ,db:Session = Depends(get_db),user = Depend
         db.add(new)
         db.commit()
         db.refresh(new)
-        
         return new
         
     except IntegrityError as err:
@@ -72,7 +80,6 @@ def get_all_products(db:Session = Depends(get_db)):
 
  
 # get products of logged in vendor
-    
 @router.get("/products/mine", response_model=list[ProductOut])
 def get_vendor_products(db:Session = Depends(get_db), user = Depends(verify_roles(roles.vendor))):
     try:
@@ -82,6 +89,8 @@ def get_vendor_products(db:Session = Depends(get_db), user = Depends(verify_role
         return products
     except IntegrityError as err:
         raise HTTPException(status_code=400,detail=err)
+    
+    
     
     
     
@@ -114,3 +123,41 @@ def get_products_by_id(id: UUID,db:Session = Depends(get_db)):
     except IntegrityError as err:
         raise HTTPException(status_code=400,detail=err)
  
+
+@router.delete("/products/delete/{id}")
+def delete_product(id: UUID,db:Session = Depends(get_db),user = Depends(verify_roles(roles.vendor,roles.admin))):
+    try:
+        found = db.query(Product).filter(Product.product_id == id).first()
+        if not found:
+            raise HTTPException(status_code=400,detail="product not found")
+        if  found.vendor_id != user.user_id:
+            raise HTTPException(status_code=400,detail="This user can not delete this product")
+        db.delete(found)
+        db.commit()
+        return "product is deleted"
+        
+    except IntegrityError as err:
+        db.rollback()
+        raise HTTPException(status_code=400,detail=err)
+    
+
+@router.patch("/products/update/{id}")
+def update_product(id:UUID,product: ProductUpdate,db:Session = Depends(get_db), user = Depends(verify_roles(roles.vendor))):
+    try:
+        found = db.query(Product).filter(Product.product_id == id).first()
+        if not found:
+            raise HTTPException(status_code=400,detail="product not found")
+        if  found.vendor_id != user.user_id:
+            raise HTTPException(status_code=400,detail="This user can not update this product")
+        
+        for key,value in product.model_dump(exclude_unset=True).items():
+            setattr(found,key,value)
+        
+        db.commit()
+        db.refresh(found)
+        
+        return found
+        
+    except IntegrityError as err:
+        db.rollback()
+        raise HTTPException(status_code=400,detail=err)
