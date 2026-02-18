@@ -33,6 +33,8 @@ def getUser(token = Depends(oauth), db: Session = Depends(get_db)):
         value = jwt.decode(token,str(secret),algorithms=[algorithm])
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
+    except:
+        raise  HTTPException(status_code=401,detail="invalid jwt")
     
     id = value["id"]
     found = get_user_by_id(id, db)

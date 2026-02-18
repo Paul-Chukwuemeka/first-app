@@ -16,6 +16,7 @@ class newProduct(BaseModel):
     name: str
     price : Decimal 
     description : Optional[str] = None
+    available: int
     
 
 class UserOut(BaseModel):
@@ -32,6 +33,7 @@ class ProductOut(BaseModel):
     price : Decimal
     description : Optional[str] = None
     vendor: UserOut
+    available_units: int
     
     class Config:
         from_attributes = True
@@ -40,6 +42,7 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     price: Optional[float] = None
     description: Optional[str] = None
+    available: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -54,7 +57,8 @@ def add_products(product: newProduct ,db:Session = Depends(get_db),user = Depend
             name=product.name,
             price = product.price,
             description = product.description,
-            vendor_id = user.user_id
+            vendor_id = user.user_id,
+            available_units = product.available
         )
         db.add(new)
         db.commit()
@@ -65,9 +69,8 @@ def add_products(product: newProduct ,db:Session = Depends(get_db),user = Depend
         db.rollback()
         raise HTTPException(status_code=400,detail=err)
 
+
 # get all products
-
-
 @router.get("/products",response_model=list[ProductOut])
 def get_all_products(db:Session = Depends(get_db)):
     try: 

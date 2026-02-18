@@ -14,6 +14,7 @@ class Product(Base):
     name = Column(String,nullable=False,index=True)
     price = Column(DECIMAL,nullable=False)
     description = Column(String,nullable=True)
+    available_units:Mapped[int] =  mapped_column(default=1,nullable=False)
     vendor_id = Column(UUID(as_uuid=True),
                        ForeignKey("users.user_id"),
                        nullable=False)

@@ -24,6 +24,7 @@ class User(Base):
         SqlEnum(roles, name="role_enum"),default=roles.customer,nullable=False
     )
     products = relationship("Product",back_populates="vendor",cascade="all, delete-orphan")
+    cart = relationship("Cart",back_populates="user",cascade="all, delete-orphan")
     token_version: Mapped[int] =  mapped_column(default=0)
     created_at = Column(DateTime(timezone=True),server_default=func.now())
     updated_at = Column(DateTime(timezone=True),onupdate=func.now(),server_default=func.now())

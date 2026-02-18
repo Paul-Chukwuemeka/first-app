@@ -11,6 +11,7 @@ from models.userModel import User,roles
 from utils.secure import getUser, verify_roles
 import random
 from datetime import datetime, timedelta,timezone
+from models.cart_model import Cart
 
 class NewUser(BaseModel):
     username: str
@@ -32,7 +33,26 @@ class UserOut(BaseModel):
     role : str
      
     class Config:
-        orm_mode = True
+        from_atrributes = True
+
+class UserConfirm(BaseModel):
+    user_id : UUID
+    role : str
+    username: str
+    email: str
+     
+    class Config:
+        from_atrributes = True
+        
+def create_cart(id, db:Session):
+    new_cart = Cart(
+        user_id = id
+    )
+    db.add(new_cart)
+    db.commit()
+    
+    
+    
 
 @router.post("/users/add")
 def create_new_user(user: NewUser,db: Session = Depends(get_db)):
@@ -46,7 +66,8 @@ def create_new_user(user: NewUser,db: Session = Depends(get_db)):
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        return new_user    
+        create_cart(new_user.user_id,db)
+        return "user and cart created"    
     except IntegrityError as err:
         db.rollback()
         return err
@@ -77,9 +98,9 @@ def login(user: loginUser,db: Session = Depends(get_db)):
     
 
 
-@router.get('/users/me')
+@router.get('/users/me', response_model=UserConfirm)
 def get_current_user(user = Depends(getUser)):
-   return "user"
+   return user
 
 
 @router.get("/users/{id}")
@@ -114,7 +135,7 @@ def upgrade_user(db:Session = Depends(get_db),user = Depends(verify_roles(roles.
         db.rollback()
         return err
     
-@router.post("/users/upgrade/confirm" , response_model= UserOut)
+@router.post("/users/upgrade/confirm" , response_model= UserConfirm)
 def upgrade_user_confirm(payload:otpConfirm,db:Session = Depends(get_db),user = Depends(verify_roles(roles.customer))):
     try:
         if not user.otp or  user.otp != payload.otp:
