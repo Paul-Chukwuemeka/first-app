@@ -1,3 +1,5 @@
 .env*
 /auth/
 /.vscode/
+db.dump
+db.sql
